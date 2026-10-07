@@ -440,13 +440,7 @@ function createMockPlan(overrides: Partial<PomodoroPlanState> = {}): PomodoroPla
   const customShortBreakSeconds = 420; // 7 min
   const customLongBreakSeconds = 1500; // 25 min
 
-  const plan: PomodoroPlan = {
-    id: "plan-custom-1",
-    userId: 1,
-    status: "focus",
-    currentPhase: "focus",
-    currentSession: 1,
-    totalSessions: 4,
+  const plan: PomodoroPlanState = createMockPlan({
     focusDurationSeconds: customFocusSeconds,
     shortBreakDurationSeconds: customShortBreakSeconds,
     longBreakDurationSeconds: customLongBreakSeconds,
@@ -455,17 +449,7 @@ function createMockPlan(overrides: Partial<PomodoroPlanState> = {}): PomodoroPla
     autoStartFocus: true,
     phaseStartedAt: t0,
     phaseEndsAt: new Date(t0.getTime() + customFocusSeconds * 1000), // 10:35:00
-    pausedAt: null,
-    pausedRemainingSeconds: null,
-    totalFocusSeconds: 0,
-    totalBreakSeconds: 0,
-    totalPausedSeconds: 0,
-    completedSessions: 0,
-    taskId: null,
-    taskTitle: null,
-    startedAt: t0,
-    completedAt: null,
-  };
+  });
 
   // Advance exactly when 35m focus ends
   const atFocusEnd = new Date("2026-09-24T10:35:00.000Z");
@@ -492,9 +476,7 @@ function createMockPlan(overrides: Partial<PomodoroPlanState> = {}): PomodoroPla
   const customShortBreakSeconds = 420; // 7 min
   const customLongBreakSeconds = 1500; // 25 min
 
-  const breakPlan: PomodoroPlan = {
-    id: "plan-custom-2",
-    userId: 1,
+  const breakPlan: PomodoroPlanState = createMockPlan({
     status: "shortBreak",
     currentPhase: "shortBreak",
     currentSession: 2,
@@ -507,17 +489,9 @@ function createMockPlan(overrides: Partial<PomodoroPlanState> = {}): PomodoroPla
     autoStartFocus: true,
     phaseStartedAt: t0,
     phaseEndsAt: new Date(t0.getTime() + customShortBreakSeconds * 1000), // 10:42:00
-    pausedAt: null,
-    pausedRemainingSeconds: null,
     totalFocusSeconds: 2100,
-    totalBreakSeconds: 0,
-    totalPausedSeconds: 0,
     completedSessions: 1,
-    taskId: null,
-    taskTitle: null,
-    startedAt: new Date("2026-09-24T10:00:00.000Z"),
-    completedAt: null,
-  };
+  });
 
   // Advance when 7m break ends
   const atBreakEnd = new Date("2026-09-24T10:42:00.000Z");
@@ -544,9 +518,7 @@ function createMockPlan(overrides: Partial<PomodoroPlanState> = {}): PomodoroPla
   const customShortBreakSeconds = 300; // 5 min
   const customLongBreakSeconds = 1200; // 20 min
 
-  const plan: PomodoroPlan = {
-    id: "plan-custom-3",
-    userId: 1,
+  const plan: PomodoroPlanState = createMockPlan({
     status: "focus",
     currentPhase: "focus",
     currentSession: 2,
@@ -559,17 +531,10 @@ function createMockPlan(overrides: Partial<PomodoroPlanState> = {}): PomodoroPla
     autoStartFocus: true,
     phaseStartedAt: t0,
     phaseEndsAt: new Date(t0.getTime() + customFocusSeconds * 1000), // 10:30:00
-    pausedAt: null,
-    pausedRemainingSeconds: null,
     totalFocusSeconds: 1800,
     totalBreakSeconds: 300,
-    totalPausedSeconds: 0,
     completedSessions: 1,
-    taskId: null,
-    taskTitle: null,
-    startedAt: new Date("2026-09-24T09:25:00.000Z"),
-    completedAt: null,
-  };
+  });
 
   const atFocusEnd = new Date("2026-09-24T10:30:00.000Z");
   const res = advancePlanToTime(plan, atFocusEnd);
