@@ -4,11 +4,15 @@ import { eq } from "drizzle-orm";
 
 
 
+function getSafeClientIdSuffix(clientId: string): string {
+    return clientId.length > 12 ? `...${clientId.slice(-12)}` : "[short]";
+}
+
 //just gets the identity of our app.
 export function getGoogleConfig() {
-    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-    const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-    const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL ?? "http://localhost:3000/auth/google/callback";
+    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim();
+    const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET?.trim();
+    const GOOGLE_CALLBACK_URL = (process.env.GOOGLE_CALLBACK_URL ?? "http://localhost:3000/auth/google/callback").trim();
 
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
         throw new Error("Missing Google OAuth credentials. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the .env file.");
@@ -37,42 +41,75 @@ export function getGoogleAuthUrl() {
     };
 
     const qs = new URLSearchParams(options);
+    console.log(`[Auth/Google] Generated auth URL. Client ID suffix: ${getSafeClientIdSuffix(GOOGLE_CLIENT_ID)}, Redirect URI: "${GOOGLE_CALLBACK_URL}"`);
     return `${rootUrl}?${qs.toString()}`;
 }
 
-export async function getGoogleTokens(code: string, redirectUri?: string) {
+export interface GoogleTokensResult {
+    access_token: string;
+    id_token: string;
+    expires_in: number;
+    refresh_token?: string;
+    scope: string;
+}
+
+// In-flight and short-term cache to deduplicate concurrent or rapid duplicate token exchange requests
+const tokenExchangeCache = new Map<string, Promise<GoogleTokensResult>>();
+
+export async function getGoogleTokens(code: string, redirectUri?: string): Promise<GoogleTokensResult> {
     const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL } = getGoogleConfig();
+    const effectiveRedirectUri = (redirectUri !== undefined ? redirectUri : GOOGLE_CALLBACK_URL).trim();
 
-    const url = "https://oauth2.googleapis.com/token";
-    const values: Record<string, string> = {
-        code,
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        redirect_uri: redirectUri !== undefined ? redirectUri : GOOGLE_CALLBACK_URL,
-        grant_type: "authorization_code",
-    };
+    const trimmedCode = code.trim();
+    const codeFingerprint = `${trimmedCode.slice(0, 4)}...${trimmedCode.slice(-4)}`;
 
-    //exchange code for tokens
-    //just fetching to tokens here
-    const res = await fetch(url, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams(values).toString(),
-    });
-
-    if (!res.ok) {
-        throw new Error(`Failed to fetch Google tokens: ${await res.text()}`);
+    if (tokenExchangeCache.has(trimmedCode)) {
+        console.log(`[Auth/Tokens] Reusing in-flight/recent token exchange for code [${codeFingerprint}]`);
+        return tokenExchangeCache.get(trimmedCode)!;
     }
 
-    return res.json() as Promise<{
-        access_token: string;
-        id_token: string;
-        expires_in: number;
-        refresh_token?: string;
-        scope: string;
-    }>;
+    console.log(
+        `[Auth/Tokens] Initiating token exchange for code [${codeFingerprint}]. Client ID suffix: ${getSafeClientIdSuffix(GOOGLE_CLIENT_ID)}, redirect_uri: "${effectiveRedirectUri}"`
+    );
+
+    const exchangePromise = (async () => {
+        const url = "https://oauth2.googleapis.com/token";
+        const values: Record<string, string> = {
+            code: trimmedCode,
+            client_id: GOOGLE_CLIENT_ID,
+            client_secret: GOOGLE_CLIENT_SECRET,
+            redirect_uri: effectiveRedirectUri,
+            grant_type: "authorization_code",
+        };
+
+        //exchange code for tokens
+        //just fetching to tokens here
+        const res = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams(values).toString(),
+        });
+
+        if (!res.ok) {
+            const errorBody = await res.text();
+            console.error(`[Auth/Tokens] Google token exchange rejected (HTTP ${res.status}): ${errorBody}`);
+            throw new Error(`Failed to fetch Google tokens: ${errorBody}`);
+        }
+
+        console.log(`[Auth/Tokens] Token exchange successful for code [${codeFingerprint}]`);
+        return res.json() as Promise<GoogleTokensResult>;
+    })();
+
+    tokenExchangeCache.set(trimmedCode, exchangePromise);
+
+    // Keep cached for 30s to prevent duplicate code submissions from triggering invalid_grant
+    setTimeout(() => {
+        tokenExchangeCache.delete(trimmedCode);
+    }, 30000);
+
+    return exchangePromise;
 }
 
 export async function refreshGoogleTokens(refresh_token: string) {
