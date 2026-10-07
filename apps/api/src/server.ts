@@ -66,7 +66,10 @@ app.get("/auth/google", (req, res) => {
 
 //endpoint run by google as this is our redirect URI
 app.get("/auth/google/callback", async (req, res) => {
-  const code = req.query.code as string;
+  const code = (req.query.code as string)?.trim();
+  const routePath = req.originalUrl.split("?")[0];
+  console.log(`[Auth/Callback] Route hit: "${routePath}", code present: ${Boolean(code)}`);
+
   //so after auth , the code is sent as a part of the redirect URI
   if (!code) {
     res.status(400).send("No code provided");
@@ -110,9 +113,10 @@ app.get("/auth/google/callback", async (req, res) => {
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
+    console.log(`[Auth/Callback] User authenticated successfully: id=${user.id}`);
     res.redirect(process.env.WEB_URL ?? "http://localhost:5173");
   } catch (error) {
-    console.error("Auth callback error:", error);
+    console.error("[Auth/Callback] Authentication failed:", error instanceof Error ? error.message : error);
     res.status(500).send("Authentication failed");
   }
 });
